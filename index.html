@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro 9x9 Sudoku</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+            --board-bg: #ffffff;
+            --primary-color: #6366f1; 
+            --primary-hover: #4f46e5;
+            --text-main: #1e293b;
+            --text-light: #64748b;
+            --border-light: #e2e8f0;
+            --border-dark: #334155;
+            --cell-bg: #ffffff;
+            --cell-selected: #c7d2fe;
+            --cell-related: #e0e7ff;
+            --cell-same: #dbeafe;
+            --error-color: #ef4444;
+            --error-bg: #fef2f2;
+            --success-color: #10b981;
+        }
+
+        /* Universal Cross-Platform Fixes */
+        * {
+            -webkit-tap-highlight-color: transparent; /* Removes gray tap flash on iOS/Android */
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 15px;
+            /* Prevents text highlighting when tapping quickly */
+            user-select: none;
+            -webkit-user-select: none; 
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        .game-container {
+            background: #ffffff;
+            padding: 30px 40px;
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 420px;
+            margin-bottom: 20px;
+        }
+
+        .stat-badge {
+            background: var(--bg-gradient);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-light);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+
+        /* 9x9 Board Styling */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(9, 45px);
+            grid-template-rows: repeat(9, 45px);
+            background-color: var(--board-bg);
+            border: 3px solid var(--border-dark);
+            border-radius: 8px;
+            overflow: hidden; 
+            margin-bottom: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: 500;
+            color: var(--primary-color);
+            border: 1px solid var(--border-light);
+            cursor: pointer;
+            touch-action: manipulation; /* Removes 300ms tap delay universally */
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+
+        .cell.given {
+            color: var(--text-main);
+            font-weight: 700;
+        }
+
+        /* Thicker borders for 3x3 sub-grids */
+        .cell:nth-child(9n+3), .cell:nth-child(9n+6) { 
+            border-right: 2px solid var(--border-dark); 
+        }
+        
+        .cell:nth-child(n+19):nth-child(-n+27),
+        .cell:nth-child(n+46):nth-child(-n+54) { 
+            border-bottom: 2px solid var(--border-dark); 
+        }
+
+        /* Highlight States */
+        .cell.selected { background-color: var(--cell-selected) !important; }
+        .cell.related { background-color: var(--cell-related); }
+        .cell.same-number { background-color: var(--cell-same); }
+        .cell.error {
+            background-color: var(--error-bg);
+            color: var(--error-color);
+            animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        /* Controls / Numpad */
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            max-width: 420px;
+            margin-bottom: 25px;
+        }
+
+        .btn-num {
+            width: 45px;
+            height: 45px;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            background-color: #ffffff;
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--primary-color);
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-num.wide { width: 60px; font-size: 18px; }
+        
+        /* Only apply hover effects on devices that support hover (Desktops) */
+        @media (hover: hover) {
+            .btn-num:hover { 
+                background-color: var(--primary-color); 
+                color: #ffffff;
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.2);
+                border-color: var(--primary-color);
+            }
+        }
+        
+        .btn-num:active { 
+            background-color: var(--primary-color); 
+            color: #ffffff;
+            transform: translateY(0); 
+            box-shadow: none; 
+        }
+
+        .actions {
+            display: flex;
+            gap: 15px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-action {
+            height: 44px;
+            padding: 0 24px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            background-color: var(--text-main);
+            color: white;
+            border-radius: 22px;
+            border: none;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (hover: hover) {
+            .btn-action:hover { 
+                background-color: #0f172a; 
+                transform: translateY(-1px);
+            }
+        }
+
+        .btn-action.hint { 
+            background-color: #ffffff; 
+            color: var(--text-main);
+            border: 2px solid var(--border-light);
+            box-shadow: none;
+        }
+        
+        @media (hover: hover) {
+            .btn-action.hint:hover { 
+                background-color: var(--bg-gradient); 
+                border-color: var(--text-light);
+            }
+        }
+
+        /* Modal Overlay for Win/Lose */
+        .overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: white;
+            padding: 40px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+            width: 90%;
+            max-width: 350px;
+        }
+
+        .overlay.active .modal {
+            transform: translateY(0);
+        }
+
+        .modal h2 { font-size: 32px; margin: 0 0 10px 0; font-weight: 700; }
+        .modal p { font-size: 18px; color: var(--text-light); margin: 0 0 25px 0; }
+
+        /* Responsive Scaling for Mobiles (Android/iPhone) */
+        @media (max-width: 480px) {
+            .game-container { padding: 20px 15px; border-radius: 16px; }
+            .board {
+                grid-template-columns: repeat(9, 36px);
+                grid-template-rows: repeat(9, 36px);
+                margin-bottom: 20px;
+            }
+            .cell { font-size: 20px; }
+            .btn-num { width: 38px; height: 42px; font-size: 18px; border-radius: 10px; }
+            .btn-num.wide { width: 50px; }
+            h1 { font-size: 28px; }
+            .controls { gap: 6px; }
+        }
+
+        @media (max-width: 370px) {
+            .board {
+                grid-template-columns: repeat(9, 32px);
+                grid-template-rows: repeat(9, 32px);
+            }
+            .cell { font-size: 18px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="header">
+            <h1>9x9 Sudoku</h1>
+        </div>
+
+        <div class="stats">
+            <div class="stat-badge" id="mistakes-display">Mistakes: 0/3</div>
+            <div class="stat-badge" id="timer-display">00:00</div>
+        </div>
+
+        <div id="board" class="board"></div>
+
+        <div class="controls">
+            <button class="btn-num" onclick="inputNumber(1)">1</button>
+            <button class="btn-num" onclick="inputNumber(2)">2</button>
+            <button class="btn-num" onclick="inputNumber(3)">3</button>
+            <button class="btn-num" onclick="inputNumber(4)">4</button>
+            <button class="btn-num" onclick="inputNumber(5)">5</button>
+            <button class="btn-num" onclick="inputNumber(6)">6</button>
+            <button class="btn-num" onclick="inputNumber(7)">7</button>
+            <button class="btn-num" onclick="inputNumber(8)">8</button>
+            <button class="btn-num" onclick="inputNumber(9)">9</button>
+            <button class="btn-num wide" onclick="eraseNumber()">⌫</button>
+        </div>
+
+        <div class="actions">
+            <button class="btn-action" onclick="initGame()">New Game</button>
+            <button class="btn-action hint" onclick="useHint()">Hint</button>
+        </div>
+    </div>
+
+    <div id="overlay" class="overlay">
+        <div class="modal">
+            <h2 id="overlay-title">Game Over</h2>
+            <p id="overlay-msg">You made 3 mistakes.</p>
+            <button class="btn-action" onclick="initGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        let solution = [];
+        let grid = [];
+        let startGrid = [];
+        let selectedRow = -1;
+        let selectedCol = -1;
+        let mistakes = 0;
+        let timer = 0;
+        let timerInterval;
+        let isGameOver = false;
+
+        const boardElement = document.getElementById('board');
+        const mistakesElement = document.getElementById('mistakes-display');
+        const timerElement = document.getElementById('timer-display');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlay-title');
+        const overlayMsg = document.getElementById('overlay-msg');
+
+        function initGame() {
+            isGameOver = false;
+            mistakes = 0;
+            selectedRow = -1;
+            selectedCol = -1;
+            updateMistakes();
+            resetTimer();
+            overlay.classList.remove('active');
+            
+            generatePuzzle();
+            renderBoard();
+        }
+
+        function generatePuzzle() {
+            const base = [
+                [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                [4, 5, 6, 7, 8, 9, 1, 2, 3],
+                [7, 8, 9, 1, 2, 3, 4, 5, 6],
+                [2, 3, 1, 5, 6, 4, 8, 9, 7],
+                [5, 6, 4, 8, 9, 7, 2, 3, 1],
+                [8, 9, 7, 2, 3, 1, 5, 6, 4],
+                [3, 1, 2, 6, 4, 5, 9, 7, 8],
+                [6, 4, 5, 9, 7, 8, 3, 1, 2],
+                [9, 7, 8, 3, 1, 2, 6, 4, 5]
+            ];
+
+            const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+            solution = base.map(row => row.map(val => nums[val - 1]));
+
+            grid = JSON.parse(JSON.stringify(solution));
+            startGrid = Array(9).fill().map(() => Array(9).fill(0));
+
+            let cellsToRemove = 45;
+            while(cellsToRemove > 0) {
+                let r = Math.floor(Math.random() * 9);
+                let c = Math.floor(Math.random() * 9);
+                if(grid[r][c] !== 0) {
+                    grid[r][c] = 0;
+                    cellsToRemove--;
+                }
+            }
+
+            for(let r=0; r<9; r++){
+                for(let c=0; c<9; c++){
+                    startGrid[r][c] = grid[r][c];
+                }
+            }
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    if (startGrid[r][c] !== 0) {
+                        cell.classList.add('given');
+                        cell.innerText = startGrid[r][c];
+                    } else if (grid[r][c] !== 0) {
+                        cell.innerText = grid[r][c];
+                    }
+
+                    // Standard click event works perfectly across all 3 platforms 
+                    // thanks to the touch-action CSS rule we added.
+                    cell.addEventListener('click', () => {
+                        selectCell(r, c);
+                    });
+                    
+                    boardElement.appendChild(cell);
+                }
+            }
+            updateHighlights();
+        }
+
+        function selectCell(r, c) {
+            if (isGameOver) return;
+            selectedRow = r;
+            selectedCol = c;
+            updateHighlights();
+        }
+
+        function updateHighlights() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                cell.classList.remove('selected', 'related', 'same-number', 'error');
+            });
+
+            if (selectedRow === -1 || selectedCol === -1) return;
+
+            const selectedValue = grid[selectedRow][selectedCol];
+            const startR = Math.floor(selectedRow / 3) * 3;
+            const startC = Math.floor(selectedCol / 3) * 3;
+
+            cells.forEach((cell, index) => {
+                let r = Math.floor(index / 9);
+                let c = index % 9;
+                let val = grid[r][c];
+
+                if (r === selectedRow || c === selectedCol || (r >= startR && r < startR + 3 && c >= startC && c < startC + 3)) {
+                    cell.classList.add('related');
+                }
+                
+                if (r === selectedRow && c === selectedCol) {
+                    cell.classList.add('selected');
+                }
+
+                if (selectedValue !== 0 && val === selectedValue && !(r === selectedRow && c === selectedCol)) {
+                    cell.classList.add('same-number');
+                }
+            });
+        }
+
+        function inputNumber(num) {
+            if (isGameOver || selectedRow === -1 || selectedCol === -1) return;
+            if (startGrid[selectedRow][selectedCol] !== 0) return;
+
+            if (num === solution[selectedRow][selectedCol]) {
+                grid[selectedRow][selectedCol] = num;
+                renderBoard();
+                checkWin();
+            } else {
+                triggerError();
+            }
+        }
+
+        function eraseNumber() {
+            if (isGameOver || selectedRow === -1 || selectedCol === -1) return;
+            if (startGrid[selectedRow][selectedCol] !== 0) return;
+            
+            grid[selectedRow][selectedCol] = 0;
+            renderBoard();
+        }
+
+        function triggerError() {
+            mistakes++;
+            updateMistakes();
+            
+            const index = selectedRow * 9 + selectedCol;
+            const cell = document.querySelectorAll('.cell')[index];
+            cell.classList.add('error');
+            setTimeout(() => cell.classList.remove('error'), 400);
+
+            if (mistakes >= 3) {
+                endGame(false);
+            }
+        }
+
+        function useHint() {
+            if (isGameOver) return;
+            let emptyCells = [];
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (grid[r][c] === 0) emptyCells.push({r, c});
+                }
+            }
+            if (emptyCells.length === 0) return;
+
+            let randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            grid[randomCell.r][randomCell.c] = solution[randomCell.r][randomCell.c];
+            selectedRow = randomCell.r;
+            selectedCol = randomCell.c;
+            renderBoard();
+            checkWin();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (['1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(e.key)) {
+                inputNumber(parseInt(e.key));
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                eraseNumber();
+            } else if (e.key === 'ArrowUp' && selectedRow > 0) selectCell(selectedRow - 1, selectedCol);
+            else if (e.key === 'ArrowDown' && selectedRow < 8) selectCell(selectedRow + 1, selectedCol);
+            else if (e.key === 'ArrowLeft' && selectedCol > 0) selectCell(selectedRow, selectedCol - 1);
+            else if (e.key === 'ArrowRight' && selectedCol < 8) selectCell(selectedRow, selectedCol + 1);
+        });
+
+        function updateMistakes() {
+            mistakesElement.innerText = `Mistakes: ${mistakes}/3`;
+        }
+
+        function checkWin() {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (grid[r][c] === 0) return;
+                }
+            }
+            endGame(true);
+        }
+
+        function endGame(won) {
+            isGameOver = true;
+            clearInterval(timerInterval);
+            overlay.classList.add('active');
+            if (won) {
+                overlayTitle.innerText = "Excellent!";
+                overlayTitle.style.color = "var(--success-color)";
+                overlayMsg.innerText = `You solved it in ${formatTime(timer)}!`;
+            } else {
+                overlayTitle.innerText = "Game Over";
+                overlayTitle.style.color = "var(--error-color)";
+                overlayMsg.innerText = "You made 3 mistakes.";
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timer = 0;
+            timerElement.innerText = "00:00";
+            timerInterval = setInterval(() => {
+                timer++;
+                timerElement.innerText = formatTime(timer);
+            }, 1000);
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = (seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
